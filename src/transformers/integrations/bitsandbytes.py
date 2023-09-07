@@ -21,7 +21,7 @@ if is_accelerate_available():
 logger = logging.get_logger(__name__)
 
 
-def set_module_quantized_tensor_to_device(module, tensor_name, device, value=None, fp16_statistics=None):
+def set_module_quantized_tensor_to_device(module, tensor_name, device, value=None, fp16_statistics=None, quantized_stats=None):
     """
     A helper function to set a given tensor (parameter of buffer) of a module on a specific device (note that doing
     `param.to(device)` creates a new tensor not linked to the parameter, which is why we need this function). The
@@ -74,13 +74,14 @@ def set_module_quantized_tensor_to_device(module, tensor_name, device, value=Non
                 new_value = old_value.to(device)
             elif isinstance(value, torch.Tensor):
                 new_value = value.to("cpu")
-                if value.dtype == torch.int8:
+                if value.dtype in (torch.int8, torch.uint8):
                     is_8bit_serializable = version.parse(importlib.metadata.version("bitsandbytes")) > version.parse(
                         "0.37.2"
                     )
                     if not is_8bit_serializable:
+                        bits_ = 4 if is_4bit else 8
                         raise ValueError(
-                            "Detected int8 weights but the version of bitsandbytes is not compatible with int8 serialization. "
+                            f"Detected {bits_} weights but the version of bitsandbytes is not compatible with {bits_} bit serialization. "
                             "Make sure to download the latest `bitsandbytes` version. `pip install --upgrade bitsandbytes`."
                         )
             else:
@@ -95,7 +96,8 @@ def set_module_quantized_tensor_to_device(module, tensor_name, device, value=Non
             if is_8bit:
                 new_value = bnb.nn.Int8Params(new_value, requires_grad=False, **kwargs).to(device)
             elif is_4bit:
-                new_value = bnb.nn.Params4bit(new_value, requires_grad=False, **kwargs).to(device)
+                # new_value = bnb.nn.Params4bit(new_value, requires_grad=False, **kwargs).to(device)
+                new_value = bnb.nn.Params4bit.from_prequantized(data=new_value, quantized_stats=quantized_stats, requires_grad=False, device=device, **kwargs)
 
             module._parameters[tensor_name] = new_value
             if fp16_statistics is not None:
