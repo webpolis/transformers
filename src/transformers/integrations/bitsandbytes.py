@@ -21,7 +21,9 @@ if is_accelerate_available():
 logger = logging.get_logger(__name__)
 
 
-def set_module_quantized_tensor_to_device(module, tensor_name, device, value=None, fp16_statistics=None, quantized_stats=None):
+def set_module_quantized_tensor_to_device(
+    module, tensor_name, device, value=None, fp16_statistics=None, quantized_stats=None
+):
     """
     A helper function to set a given tensor (parameter of buffer) of a module on a specific device (note that doing
     `param.to(device)` creates a new tensor not linked to the parameter, which is why we need this function). The
@@ -101,7 +103,9 @@ def set_module_quantized_tensor_to_device(module, tensor_name, device, value=Non
                     new_value = bnb.nn.Params4bit(new_value, requires_grad=False, **kwargs).to(device)
                 else:
                     # from saved pre-qunatized model
-                    new_value = bnb.nn.Params4bit.from_prequantized(data=new_value, quantized_stats=quantized_stats, requires_grad=False, device=device, **kwargs)
+                    new_value = bnb.nn.Params4bit.from_prequantized(
+                        data=new_value, quantized_stats=quantized_stats, requires_grad=False, device=device, **kwargs
+                    )
 
             module._parameters[tensor_name] = new_value
             if fp16_statistics is not None:

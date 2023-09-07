@@ -737,9 +737,13 @@ def _load_state_dict_into_meta_model(
             set_module_tensor_to_device(model, param_name, param_device, **set_module_kwargs)
         elif param.dtype == torch.uint8:
             # 4bit loading. TODO: better condition
-            module_prefix = '.'.join(param_name.split('.')[:-1])
-            quantized_stats = {k.split('.')[-1]: v for k, v in state_dict.items() if module_prefix in k}  # add if k.split('.')[-1] not in ('bias', 'weight')
-            set_module_quantized_tensor_to_device(model, param_name, param_device, value=param, quantized_stats=quantized_stats)
+            module_prefix = ".".join(param_name.split(".")[:-1])
+            quantized_stats = {
+                k.split(".")[-1]: v for k, v in state_dict.items() if module_prefix in k
+            }  # add if k.split('.')[-1] not in ('bias', 'weight')
+            set_module_quantized_tensor_to_device(
+                model, param_name, param_device, value=param, quantized_stats=quantized_stats
+            )
 
         else:
             if param.dtype == torch.int8 and param_name.replace("weight", "SCB") in state_dict.keys():
@@ -2602,7 +2606,8 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
         if (
             is_8bit_serializable
             and quantization_method_from_args == QuantizationMethod.BITS_AND_BYTES
-            and load_in_8bit or load_in_4bit
+            and load_in_8bit
+            or load_in_4bit
         ):
             if quantization_method_from_config == QuantizationMethod.BITS_AND_BYTES:
                 logger.warning(
@@ -3486,8 +3491,10 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
                         model_key = ".".join(checkpoint_key.split(".")[1:])
 
                     if model_key in model_state_dict:
-                        if state_dict[checkpoint_key].shape[-1] == 1 \
-                            and state_dict[checkpoint_key].numel() * 2 == model_state_dict[model_key].numel():
+                        if (
+                            state_dict[checkpoint_key].shape[-1] == 1
+                            and state_dict[checkpoint_key].numel() * 2 == model_state_dict[model_key].numel()
+                        ):
                             # such mismatched weights are OK for 4bit quantizations. TODO: use config-based condition
                             pass
                         elif state_dict[checkpoint_key].shape != model_state_dict[model_key].shape:
@@ -3642,9 +3649,22 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
             raise RuntimeError(f"Error(s) in loading state_dict for {model.__class__.__name__}:\n\t{error_msg}")
 
         if is_quantized:
-            quantization_keys = {'absmax', 'blocksize', 'datatype', 'dtype', 'nested', 'nested_absmax', 'nested_blocksize', 
-                                 'nested_code', 'nested_dtype', 'nested_offset', 'quant_type', 'SCB', 'shape'}
-            unexpected_keys = [k for k in unexpected_keys if k.split('.')[-1] not in quantization_keys]
+            quantization_keys = {
+                "absmax",
+                "blocksize",
+                "datatype",
+                "dtype",
+                "nested",
+                "nested_absmax",
+                "nested_blocksize",
+                "nested_code",
+                "nested_dtype",
+                "nested_offset",
+                "quant_type",
+                "SCB",
+                "shape",
+            }
+            unexpected_keys = [k for k in unexpected_keys if k.split(".")[-1] not in quantization_keys]
             missing_keys = [elem for elem in missing_keys if "SCB" not in elem]
 
         if len(unexpected_keys) > 0:
