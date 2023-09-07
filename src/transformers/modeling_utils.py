@@ -1839,9 +1839,9 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
         if getattr(self, "is_loaded_in_4bit", False):
             warnings.warn(
                 "You are calling `save_pretrained` to a 4-bit converted model you may likely encounter unexepected"
-                " behaviors. If you want to save 8-bit models, make sure to have `bitsandbytes>=0.XX` installed.",
+                " behaviors. If you want to save 4-bit models, make sure to have `bitsandbytes>=0.42` installed.",
                 UserWarning,
-            )
+            )  # TODO:  verify version
 
         if "save_config" in kwargs:
             warnings.warn(
