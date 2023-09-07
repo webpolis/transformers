@@ -96,8 +96,12 @@ def set_module_quantized_tensor_to_device(module, tensor_name, device, value=Non
             if is_8bit:
                 new_value = bnb.nn.Int8Params(new_value, requires_grad=False, **kwargs).to(device)
             elif is_4bit:
-                # new_value = bnb.nn.Params4bit(new_value, requires_grad=False, **kwargs).to(device)
-                new_value = bnb.nn.Params4bit.from_prequantized(data=new_value, quantized_stats=quantized_stats, requires_grad=False, device=device, **kwargs)
+                if new_value.dtype not in (torch.uint8,):
+                    # fresh model to be quantized
+                    new_value = bnb.nn.Params4bit(new_value, requires_grad=False, **kwargs).to(device)
+                else:
+                    # from saved pre-qunatized model
+                    new_value = bnb.nn.Params4bit.from_prequantized(data=new_value, quantized_stats=quantized_stats, requires_grad=False, device=device, **kwargs)
 
             module._parameters[tensor_name] = new_value
             if fp16_statistics is not None:
