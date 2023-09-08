@@ -89,17 +89,22 @@ def set_module_quantized_tensor_to_device(
             else:
                 new_value = torch.tensor(value, device="cpu")
 
-            # Support models using `Conv1D` in place of `nn.Linear` (e.g. gpt2) by transposing the weight matrix prior to quantization.
-            # Since weights are saved in the correct "orientation", we skip transposing when loading.
-            if issubclass(module.source_cls, Conv1D) and fp16_statistics is None:
-                new_value = new_value.T
-
             kwargs = old_value.__dict__
+
             if is_8bit:
+                # Support models using `Conv1D` in place of `nn.Linear` (e.g. gpt2) by transposing the weight matrix prior to quantization.
+                # Since weights are saved in the correct "orientation", we skip transposing when loading.
+                if issubclass(module.source_cls, Conv1D) and fp16_statistics is None:
+                    new_value = new_value.T
+
                 new_value = bnb.nn.Int8Params(new_value, requires_grad=False, **kwargs).to(device)
+
             elif is_4bit:
                 if new_value.dtype not in (torch.uint8,):
                     # fresh model to be quantized
+                    if issubclass(module.source_cls, Conv1D):
+                        new_value = new_value.T
+
                     new_value = bnb.nn.Params4bit(new_value, requires_grad=False, **kwargs).to(device)
                 else:
                     # from saved pre-qunatized model
