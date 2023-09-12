@@ -1840,7 +1840,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
                 UserWarning,
             )
 
-        if getattr(self, "is_loaded_in_4bit", False):
+        if getattr(self, "is_loaded_in_4bit", False) and getattr(self, "is_4bit_serializable", False):
             warnings.warn(
                 "You are calling `save_pretrained` to a 4-bit converted model you may likely encounter unexepected"
                 " behaviors. If you want to save 4-bit models, make sure to have `bitsandbytes>=0.42` installed.",
@@ -2375,8 +2375,10 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
             use_safetensors = False
 
         if is_bitsandbytes_available():
+            is_4bit_serializable = version.parse(importlib.metadata.version("bitsandbytes")) > version.parse("0.41")  # TODO update version number after BNB release with PR #753
             is_8bit_serializable = version.parse(importlib.metadata.version("bitsandbytes")) > version.parse("0.37.2")
         else:
+            is_4bit_serializable = False
             is_8bit_serializable = False
 
         if trust_remote_code is True:
@@ -2603,12 +2605,9 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
 
             quantizer = GPTQQuantizer.from_dict(quantization_config.to_dict())
 
-        if (
-            is_8bit_serializable
-            and quantization_method_from_args == QuantizationMethod.BITS_AND_BYTES
-            and load_in_8bit
-            or load_in_4bit
-        ):
+        if quantization_method_from_args == QuantizationMethod.BITS_AND_BYTES \
+            and ((is_8bit_serializable and load_in_8bit) 
+                 or (is_4bit_serializable and load_in_4bit)):
             if quantization_method_from_config == QuantizationMethod.BITS_AND_BYTES:
                 logger.warning(
                     "You passed `quantization_config` to `from_pretrained` but the model you're loading already has a"
@@ -2617,7 +2616,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
                 )
             config.quantization_config = quantization_config
         elif (
-            is_8bit_serializable
+            (is_8bit_serializable or is_4bit_serializable)
             and not (load_in_8bit or load_in_4bit)
             and quantization_method_from_config == QuantizationMethod.BITS_AND_BYTES
         ):
@@ -3032,6 +3031,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
 
             model.config.quantization_config = quantization_config
             model.is_8bit_serializable = is_8bit_serializable
+            model.is_4bit_serializable = is_4bit_serializable
 
         if load_in_8bit and torch_dtype is None:
             logger.warning(
