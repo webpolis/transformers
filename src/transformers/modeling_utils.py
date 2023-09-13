@@ -661,6 +661,7 @@ def _load_state_dict_into_meta_model(
 
     old_keys = []
     new_keys = []
+    additional_used_keys = []  # storage for keys not in expected_keys, but used in quantization
     for key in state_dict.keys():
         new_key = None
         if "gamma" in key:
@@ -739,8 +740,10 @@ def _load_state_dict_into_meta_model(
             # 4bit loading. TODO: better condition
             module_prefix = ".".join(param_name.split(".")[:-1])
             quantized_stats = {
-                k.split(".")[-1]: v for k, v in state_dict.items() if module_prefix in k
-            }  # add if k.split('.')[-1] not in ('bias', 'weight')
+                k: v for k, v in state_dict.items() if param_name in k[:-1]
+            }
+            additional_used_keys.extend(quantized_stats.keys())
+
             set_module_quantized_tensor_to_device(
                 model, param_name, param_device, value=param, quantized_stats=quantized_stats
             )
@@ -748,6 +751,7 @@ def _load_state_dict_into_meta_model(
         else:
             if param.dtype == torch.int8 and param_name.replace("weight", "SCB") in state_dict.keys():
                 fp16_statistics = state_dict[param_name.replace("weight", "SCB")]
+                additional_used_keys.append(param_name.replace("weight", "SCB"))
             else:
                 fp16_statistics = None
 
@@ -756,7 +760,7 @@ def _load_state_dict_into_meta_model(
                     model, param_name, param_device, value=param, fp16_statistics=fp16_statistics
                 )
 
-    return error_msgs, offload_index, state_dict_index
+    return error_msgs, offload_index, state_dict_index, additional_used_keys
 
 
 def _add_variant(weights_name: str, variant: Optional[str] = None) -> str:
@@ -3584,7 +3588,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
 
                 if low_cpu_mem_usage:
                     if not is_fsdp_enabled() or is_fsdp_enabled_and_dist_rank_0():
-                        new_error_msgs, offload_index, state_dict_index = _load_state_dict_into_meta_model(
+                        new_error_msgs, offload_index, state_dict_index, additional_used_keys = _load_state_dict_into_meta_model(
                             model_to_load,
                             state_dict,
                             loaded_keys,
@@ -3649,22 +3653,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
             raise RuntimeError(f"Error(s) in loading state_dict for {model.__class__.__name__}:\n\t{error_msg}")
 
         if is_quantized:
-            quantization_keys = {
-                "absmax",
-                "blocksize",
-                "datatype",
-                "dtype",
-                "nested",
-                "nested_absmax",
-                "nested_blocksize",
-                "nested_code",
-                "nested_dtype",
-                "nested_offset",
-                "quant_type",
-                "SCB",
-                "shape",
-            }
-            unexpected_keys = [k for k in unexpected_keys if k.split(".")[-1] not in quantization_keys]
+            unexpected_keys = [k for k in unexpected_keys if k.split(".")[-1] not in additional_used_keys]
             missing_keys = [elem for elem in missing_keys if "SCB" not in elem]
 
         if len(unexpected_keys) > 0:
