@@ -635,8 +635,7 @@ def _load_state_dict_into_meta_model(
     is_quantized=False,
     is_safetensors=False,
     keep_in_fp32_modules=None,
-    mismatched_keys=None,
-    unexpected_keys=None,  # passing `unexpected` to clenup from quantization items
+    unexpected_keys=None,  # passing `unexpected` for cleanup from quantization items
 ):
     """
     This is somewhat similar to `_load_state_dict_into_model`, but deals with a model that has some or all of its
@@ -736,31 +735,38 @@ def _load_state_dict_into_meta_model(
         elif not is_quantized:
             # For backward compatibility with older versions of `accelerate`
             set_module_tensor_to_device(model, param_name, param_device, **set_module_kwargs)
-        elif param.dtype == torch.uint8:
-            # 4bit loading. TODO: better condition
-            module_prefix = ".".join(param_name.split(".")[:-1])
-
-            quantized_stats = {}
-            for k, v in state_dict.items():
-                if param_name + '.' in k:
-                    quantized_stats[k] = v
-                    unexpected_keys.remove(k)  # is there is a risk of ValueError? Add `if` then.
-
-            set_module_quantized_tensor_to_device(
-                model, param_name, param_device, value=param, quantized_stats=quantized_stats
-            )
-
         else:
-            if param.dtype == torch.int8 and param_name.replace("weight", "SCB") in state_dict.keys():
-                fp16_statistics = state_dict[param_name.replace("weight", "SCB")]
-                unexpected_keys.remove(param_name.replace("weight", "SCB"))
-            else:
-                fp16_statistics = None
+            assert is_quantized, "something broke above this line"
+            # assert param.dtype in (torch.int8, torch.uint8)
+            quantized_stats = {}
 
-            if "SCB" not in param_name:
+            if (param_name + '.quant_state.bitsandbytes__fp4' in state_dict) or \
+                (param_name + '.quant_state.bitsandbytes__nf4' in state_dict):        
+                # 4bit loading. This can be expanded to make a universal call for 4/8 bit bnb loading
+                for k, v in state_dict.items():
+                    if param_name + '.' in k:
+                        quantized_stats[k] = v
+                        unexpected_keys.remove(k)  # is there is a risk of ValueError? Add `if` then.
+
                 set_module_quantized_tensor_to_device(
-                    model, param_name, param_device, value=param, fp16_statistics=fp16_statistics
-                )
+                    model, param_name, param_device, value=param, quantized_stats=quantized_stats
+                    )
+
+            elif param.dtype == torch.int8 and param_name.replace("weight", "SCB") in state_dict.keys():
+                # 8bit loading. Could be combined with the above 4bit call.
+                # condition looks unreliable
+                fp16_statistics_key = param_name.replace("weight", "SCB")
+                unexpected_keys.remove(fp16_statistics_key)
+
+                if "SCB" not in param_name:  # looks like a redundant check
+                    set_module_quantized_tensor_to_device(
+                        model, param_name, param_device, value=param, 
+                        fp16_statistics=state_dict[fp16_statistics_key]
+                    )
+            else:
+                # loading not quantized params in quantized model
+                set_module_quantized_tensor_to_device(model, param_name, param_device, value=param)
+
 
     return error_msgs, offload_index, state_dict_index
 
@@ -3605,7 +3611,6 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
                             is_quantized=is_quantized,
                             is_safetensors=is_safetensors,
                             keep_in_fp32_modules=keep_in_fp32_modules,
-                            mismatched_keys=mismatched_keys,
                             unexpected_keys = unexpected_keys,
                         )
                         error_msgs += new_error_msgs
