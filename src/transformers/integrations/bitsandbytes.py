@@ -100,7 +100,7 @@ def set_module_quantized_tensor_to_device(
                 if new_value.dtype in (torch.int8, torch.uint8):
                     if not is_8bit_serializable:
                         raise ValueError(
-                            f"Detected int8 weights but the version of bitsandbytes is not compatible with int8 serialization. "
+                            "Detected int8 weights but the version of bitsandbytes is not compatible with int8 serialization. "
                             "Make sure to download the latest `bitsandbytes` version. `pip install --upgrade bitsandbytes`."
                         )
                 new_value = bnb.nn.Int8Params(new_value, requires_grad=False, **kwargs).to(device)
@@ -115,7 +115,7 @@ def set_module_quantized_tensor_to_device(
                     # TODO update version number after BNB release with PR #753
                     if not is_4bit_serializable:
                         raise ValueError(
-                            f"Detected 4-bit weights but the version of bitsandbytes is not compatible with 4-bit serialization. "
+                            "Detected 4-bit weights but the version of bitsandbytes is not compatible with 4-bit serialization. "
                             "Make sure to download the latest `bitsandbytes` version. `pip install --upgrade bitsandbytes`."
                         )
                     new_value = bnb.nn.Params4bit.from_prequantized(
