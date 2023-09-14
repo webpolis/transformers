@@ -40,8 +40,8 @@ def set_module_quantized_tensor_to_device(
         value (`torch.Tensor`, *optional*):
             The value of the tensor (useful when going from the meta device to any other device).
         fp16_statistics (`torch.HalfTensor`, *optional*):
-            The list of fp16 statistics to set on the module, used for int8 quantization.
-        quantized_stats dict[str, Any]: 
+            The list of fp16 statistics to set on the module, used for serialization.
+        quantized_stats dict[str, Any]:
             Dict with items for 4-bit quantization
 
     """
@@ -89,11 +89,14 @@ def set_module_quantized_tensor_to_device(
 
             kwargs = old_value.__dict__
 
-            assert prequantized_loading == (new_value.dtype in (torch.int8, torch.uint8)), \
-                f"Value dtype `{new_value.dtype}` is not compatible with parameter quantization status."
+            assert prequantized_loading == (
+                new_value.dtype in (torch.int8, torch.uint8)
+            ), f"Value dtype `{new_value.dtype}` is not compatible with parameter quantization status."
 
             if is_8bit:
-                is_8bit_serializable = version.parse(importlib.metadata.version("bitsandbytes")) > version.parse("0.37.2")
+                is_8bit_serializable = version.parse(importlib.metadata.version("bitsandbytes")) > version.parse(
+                    "0.37.2"
+                )
                 if new_value.dtype in (torch.int8, torch.uint8):
                     if not is_8bit_serializable:
                         raise ValueError(
@@ -104,7 +107,9 @@ def set_module_quantized_tensor_to_device(
 
             elif is_4bit:
                 if prequantized_loading:
-                    is_4bit_serializable = version.parse(importlib.metadata.version("bitsandbytes")) > version.parse("0.41")  
+                    is_4bit_serializable = version.parse(importlib.metadata.version("bitsandbytes")) > version.parse(
+                        "0.41"
+                    )
                     # TODO update version number after BNB release with PR #753
                     if not is_4bit_serializable:
                         raise ValueError(

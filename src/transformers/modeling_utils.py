@@ -740,17 +740,18 @@ def _load_state_dict_into_meta_model(
             # assert param.dtype in (torch.int8, torch.uint8)
             quantized_stats = {}
 
-            if (param_name + '.quant_state.bitsandbytes__fp4' in state_dict) or \
-                (param_name + '.quant_state.bitsandbytes__nf4' in state_dict):        
+            if (param_name + ".quant_state.bitsandbytes__fp4" in state_dict) or (
+                param_name + ".quant_state.bitsandbytes__nf4" in state_dict
+            ):
                 # 4bit loading. This can be expanded to make a universal call for 4/8 bit bnb loading
                 for k, v in state_dict.items():
-                    if param_name + '.' in k:
+                    if param_name + "." in k:
                         quantized_stats[k] = v
                         unexpected_keys.remove(k)  # is there is a risk of ValueError? Add `if` then.
 
                 set_module_quantized_tensor_to_device(
                     model, param_name, param_device, value=param, quantized_stats=quantized_stats
-                    )
+                )
 
             elif param.dtype == torch.int8 and param_name.replace("weight", "SCB") in state_dict.keys():
                 # 8bit loading. Could be combined with the above 4bit call.
@@ -760,13 +761,11 @@ def _load_state_dict_into_meta_model(
 
                 if "SCB" not in param_name:  # looks like a redundant check
                     set_module_quantized_tensor_to_device(
-                        model, param_name, param_device, value=param, 
-                        fp16_statistics=state_dict[fp16_statistics_key]
+                        model, param_name, param_device, value=param, fp16_statistics=state_dict[fp16_statistics_key]
                     )
             else:
                 # loading not quantized params in quantized model
                 set_module_quantized_tensor_to_device(model, param_name, param_device, value=param)
-
 
     return error_msgs, offload_index, state_dict_index
 
@@ -2387,7 +2386,8 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
             use_safetensors = False
 
         if is_bitsandbytes_available():
-            is_4bit_serializable = version.parse(importlib.metadata.version("bitsandbytes")) > version.parse("0.41")  # TODO update version number after BNB release with PR #753
+            is_4bit_serializable = version.parse(importlib.metadata.version("bitsandbytes")) > version.parse("0.41")
+            # TODO update version number after BNB release with PR #753
             is_8bit_serializable = version.parse(importlib.metadata.version("bitsandbytes")) > version.parse("0.37.2")
         else:
             is_4bit_serializable = False
@@ -2617,9 +2617,9 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
 
             quantizer = GPTQQuantizer.from_dict(quantization_config.to_dict())
 
-        if quantization_method_from_args == QuantizationMethod.BITS_AND_BYTES \
-            and ((is_8bit_serializable and load_in_8bit) 
-                 or (is_4bit_serializable and load_in_4bit)):
+        if quantization_method_from_args == QuantizationMethod.BITS_AND_BYTES and (
+            (is_8bit_serializable and load_in_8bit) or (is_4bit_serializable and load_in_4bit)
+        ):
             if quantization_method_from_config == QuantizationMethod.BITS_AND_BYTES:
                 logger.warning(
                     "You passed `quantization_config` to `from_pretrained` but the model you're loading already has a"
@@ -3507,7 +3507,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
                             state_dict[checkpoint_key].shape[-1] == 1
                             and state_dict[checkpoint_key].numel() * 2 == model_state_dict[model_key].numel()
                         ):
-                            # Such mismatched weights are OK for 4bit quantizations. 
+                            # Such mismatched weights are OK for 4bit quantizations.
                             # Need more reliable condition here, ideally based on type(module)
                             pass
                         elif state_dict[checkpoint_key].shape != model_state_dict[model_key].shape:
@@ -3612,7 +3612,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
                             is_quantized=is_quantized,
                             is_safetensors=is_safetensors,
                             keep_in_fp32_modules=keep_in_fp32_modules,
-                            unexpected_keys = unexpected_keys,
+                            unexpected_keys=unexpected_keys,
                         )
                         error_msgs += new_error_msgs
                     else:
@@ -3662,10 +3662,10 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
             raise RuntimeError(f"Error(s) in loading state_dict for {model.__class__.__name__}:\n\t{error_msg}")
 
         if is_quantized:
-            # unexpected_keys = [elem for elem in unexpected_keys if "SCB" not in elem]  
+            # unexpected_keys = [elem for elem in unexpected_keys if "SCB" not in elem]
             # handled inside _load_state_dict_into_meta_model() now
 
-            # missing_keys = [elem for elem in missing_keys if "SCB" not in elem]  
+            # missing_keys = [elem for elem in missing_keys if "SCB" not in elem]
             # this is not needed -- 8bit model breaks without this item
             pass
 
