@@ -104,6 +104,8 @@ def set_module_quantized_tensor_to_device(
                             "Make sure to download the latest `bitsandbytes` version. `pip install --upgrade bitsandbytes`."
                         )
                 new_value = bnb.nn.Int8Params(new_value, requires_grad=False, **kwargs).to(device)
+                if prequantized_loading:
+                    setattr(new_value, "SCB", fp16_statistics.to(device))
 
             elif is_4bit:
                 if prequantized_loading:
@@ -123,8 +125,6 @@ def set_module_quantized_tensor_to_device(
                     new_value = bnb.nn.Params4bit(new_value, requires_grad=False, **kwargs).to(device)
 
             module._parameters[tensor_name] = new_value
-            if fp16_statistics is not None:
-                setattr(module.weight, "SCB", fp16_statistics.to(device))
 
         else:
             pass  # param.device.type == "cuda"  # is it a possible loading scenario?
