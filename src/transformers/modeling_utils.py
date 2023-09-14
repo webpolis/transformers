@@ -3507,7 +3507,8 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
                             state_dict[checkpoint_key].shape[-1] == 1
                             and state_dict[checkpoint_key].numel() * 2 == model_state_dict[model_key].numel()
                         ):
-                            # such mismatched weights are OK for 4bit quantizations. TODO: use config-based condition
+                            # Such mismatched weights are OK for 4bit quantizations. 
+                            # Need more reliable condition here, ideally based on type(module)
                             pass
                         elif state_dict[checkpoint_key].shape != model_state_dict[model_key].shape:
                             mismatched_keys.append(
