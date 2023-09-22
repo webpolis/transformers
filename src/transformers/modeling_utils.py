@@ -735,19 +735,20 @@ def _load_state_dict_into_meta_model(
         elif not is_quantized:
             # For backward compatibility with older versions of `accelerate`
             set_module_tensor_to_device(model, param_name, param_device, **set_module_kwargs)
-        else:
-            assert is_quantized, "something broke above this line"
-            # assert param.dtype in (torch.int8, torch.uint8)
+        elif param.dtype in (torch.int8, torch.uint8) and is_quantized:
+            # handling newly quantized weights and loaded quantized weights
+            # edit the param.dtype restrictions and is_quantized condition when adding new quant methods
             quantized_stats = {}
 
             if (param_name + ".quant_state.bitsandbytes__fp4" in state_dict) or (
                 param_name + ".quant_state.bitsandbytes__nf4" in state_dict
             ):
-                # 4bit loading. This can be expanded to make a universal call for 4/8 bit bnb loading
+                # 4bit loading. Collecting components for restoring quantized weight
+                # This can be expanded to make a universal call for any quantized weight loading
                 for k, v in state_dict.items():
                     if param_name + "." in k:
                         quantized_stats[k] = v
-                        unexpected_keys.remove(k)  # is there is a risk of ValueError? Add `if` then.
+                        unexpected_keys.remove(k)
 
                 set_module_quantized_tensor_to_device(
                     model, param_name, param_device, value=param, quantized_stats=quantized_stats
@@ -759,13 +760,16 @@ def _load_state_dict_into_meta_model(
                 fp16_statistics_key = param_name.replace("weight", "SCB")
                 unexpected_keys.remove(fp16_statistics_key)
 
-                if "SCB" not in param_name:  # looks like a redundant check
+                if "SCB" not in param_name:
+                    # looks like a redundant if -- .SCB should not be in the loaded_state_dict_keys or expected_keys
                     set_module_quantized_tensor_to_device(
                         model, param_name, param_device, value=param, fp16_statistics=state_dict[fp16_statistics_key]
                     )
             else:
                 # loading not quantized params in quantized model
                 set_module_quantized_tensor_to_device(model, param_name, param_device, value=param)
+        else:
+            raise ValueError("impossible combination of datatypes and quantization state encountered")
 
     return error_msgs, offload_index, state_dict_index
 
