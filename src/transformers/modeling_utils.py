@@ -765,11 +765,9 @@ def _load_state_dict_into_meta_model(
                     set_module_quantized_tensor_to_device(
                         model, param_name, param_device, value=param, fp16_statistics=state_dict[fp16_statistics_key]
                     )
-            else:
-                # loading not quantized params in quantized model
-                set_module_quantized_tensor_to_device(model, param_name, param_device, value=param)
         else:
-            raise ValueError("impossible combination of datatypes and quantization state encountered")
+            # loading not quantized params in quantized model
+            set_module_quantized_tensor_to_device(model, param_name, param_device, value=param)
 
     return error_msgs, offload_index, state_dict_index
 
@@ -1848,17 +1846,25 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
             kwargs["token"] = token
 
         # Checks if the model has been loaded in 8-bit
-        if getattr(self, "is_loaded_in_8bit", False) and getattr(self, "is_8bit_serializable", False):
+        if (
+            getattr(self, "is_loaded_in_8bit", False)
+            and getattr(self, "is_8bit_serializable", False)
+            and version.parse(importlib.metadata.version("bitsandbytes")) < version.parse("0.37.2")
+        ):
             raise NotImplementedError(
-                "You are calling `save_pretrained` to a 8-bit converted model you may likely encounter "
-                "unexepected behaviors. If you want to save 8-bit models, make sure to have `bitsandbytes>0.37.2` installed.",
+                "You are calling `save_pretrained` to a 8-bit converted model, but your `bitsandbytes` version doesn't support it. "
+                "If you want to save 8-bit models, make sure to have `bitsandbytes>0.37.2` installed."
             )
 
-        # TODO: verify bnb version in the statement
-        if getattr(self, "is_loaded_in_4bit", False) and getattr(self, "is_4bit_serializable", False):
+        # TODO: update bnb version in the statement. 0.41 is a temporary value to enable testing
+        if (
+            getattr(self, "is_loaded_in_4bit", False)
+            and getattr(self, "is_4bit_serializable", False)
+            and version.parse(importlib.metadata.version("bitsandbytes")) < version.parse("0.41.0")
+        ):
             raise NotImplementedError(
-                "You are calling `save_pretrained` to a 4-bit converted model you may likely encounter "
-                "unexepected behaviors. If you want to save 4-bit models, make sure to have `bitsandbytes>=0.42` installed.",
+                "You are calling `save_pretrained` to a 4-bit converted model, but your `bitsandbytes` version doesn't support it. "
+                "If you want to save 4-bit models, make sure to have `bitsandbytes>=0.42` installed."
             )
 
         if "save_config" in kwargs:
@@ -2389,7 +2395,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
             use_safetensors = False
 
         if is_bitsandbytes_available():
-            is_4bit_serializable = version.parse(importlib.metadata.version("bitsandbytes")) > version.parse("0.41")
+            is_4bit_serializable = version.parse(importlib.metadata.version("bitsandbytes")) >= version.parse("0.41")
             # TODO update version number after BNB release with PR #753
             is_8bit_serializable = version.parse(importlib.metadata.version("bitsandbytes")) > version.parse("0.37.2")
         else:
