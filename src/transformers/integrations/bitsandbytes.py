@@ -41,7 +41,7 @@ def set_module_quantized_tensor_to_device(
             The value of the tensor (useful when going from the meta device to any other device).
         fp16_statistics (`torch.HalfTensor`, *optional*):
             The list of fp16 statistics to set on the module, used for serialization.
-        quantized_stats dict[str, Any]:
+        quantized_stats (`dict[str, Any]`, *optional*):
             Dict with items for 4-bit quantization
 
     """
