@@ -3664,14 +3664,6 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
                 )
             raise RuntimeError(f"Error(s) in loading state_dict for {model.__class__.__name__}:\n\t{error_msg}")
 
-        if is_quantized:
-            # unexpected_keys = [elem for elem in unexpected_keys if "SCB" not in elem]
-            # handled inside _load_state_dict_into_meta_model() now
-
-            # missing_keys = [elem for elem in missing_keys if "SCB" not in elem]
-            # this is not needed -- 8bit model breaks without this item
-            pass
-
         if len(unexpected_keys) > 0:
             archs = [] if model.config.architectures is None else model.config.architectures
             warner = logger.warning if model.__class__.__name__ in archs else logger.info
