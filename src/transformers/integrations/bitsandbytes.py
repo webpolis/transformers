@@ -97,8 +97,7 @@ def set_module_quantized_tensor_to_device(
                 is_8bit_serializable = version.parse(importlib.metadata.version("bitsandbytes")) > version.parse(
                     "0.37.2"
                 )
-                if new_value.dtype in (torch.int8, torch.uint8):
-                    if not is_8bit_serializable:
+                if new_value.dtype in (torch.int8, torch.uint8) and not is_8bit_serializable:
                         raise ValueError(
                             "Detected int8 weights but the version of bitsandbytes is not compatible with int8 serialization. "
                             "Make sure to download the latest `bitsandbytes` version. `pip install --upgrade bitsandbytes`."
