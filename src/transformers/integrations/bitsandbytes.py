@@ -89,19 +89,20 @@ def set_module_quantized_tensor_to_device(
 
             kwargs = old_value.__dict__
 
-            assert prequantized_loading == (
-                new_value.dtype in (torch.int8, torch.uint8)
-            ), f"Value dtype `{new_value.dtype}` is not compatible with parameter quantization status."
+            if prequantized_loading != (new_value.dtype in (torch.int8, torch.uint8)):
+                raise ValueError(
+                    f"Value dtype `{new_value.dtype}` is not compatible with parameter quantization status."
+                )
 
             if is_8bit:
                 is_8bit_serializable = version.parse(importlib.metadata.version("bitsandbytes")) > version.parse(
                     "0.37.2"
                 )
                 if new_value.dtype in (torch.int8, torch.uint8) and not is_8bit_serializable:
-                        raise ValueError(
-                            "Detected int8 weights but the version of bitsandbytes is not compatible with int8 serialization. "
-                            "Make sure to download the latest `bitsandbytes` version. `pip install --upgrade bitsandbytes`."
-                        )
+                    raise ValueError(
+                        "Detected int8 weights but the version of bitsandbytes is not compatible with int8 serialization. "
+                        "Make sure to download the latest `bitsandbytes` version. `pip install --upgrade bitsandbytes`."
+                    )
                 new_value = bnb.nn.Int8Params(new_value, requires_grad=False, **kwargs).to(device)
                 if prequantized_loading:
                     setattr(new_value, "SCB", fp16_statistics.to(device))
@@ -126,7 +127,7 @@ def set_module_quantized_tensor_to_device(
             module._parameters[tensor_name] = new_value
 
         else:
-            pass  # param.device.type == "cuda"  # is it a possible loading scenario?
+            raise ValueError("Quantized parameter passed with device.type == 'cuda'")
 
     else:
         if value is None:
