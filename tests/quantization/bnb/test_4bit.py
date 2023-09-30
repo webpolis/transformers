@@ -20,6 +20,7 @@ import unittest
 from packaging import version
 
 from transformers import (
+    AutoConfig,
     AutoModel,
     AutoModelForCausalLM,
     AutoModelForSeq2SeqLM,
@@ -217,27 +218,87 @@ class Bnb4BitTest(Base4bitTest):
 
         self.assertIn(self.tokenizer.decode(output_sequences[0], skip_special_tokens=True), self.EXPECTED_OUTPUTS)
 
-    def test_raise_on_save_pretrained(self):
+    def test_4bit_serialization(self, quant_type="nf4", safe_serialization=False):
         r"""
-        Test whether trying to save a model after converting it in 8-bit will throw a warning.
+        Test whether it is possible to serialize a model in 4-bit.
         """
-        with self.assertRaises(NotImplementedError), tempfile.TemporaryDirectory() as tmpdirname:
-            self.model_4bit.save_pretrained(tmpdirname)
 
-    def test_raise_if_config_and_load_in_4bit(self):
-        r"""
-        Test that loading the model with the config and `load_in_4bit` raises an error
-        """
-        bnb_config = BitsAndBytesConfig()
+        import bitsandbytes as bnb
 
-        with self.assertRaises(ValueError):
-            _ = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                quantization_config=bnb_config,
-                load_in_4bit=True,
-                device_map="auto",
-                bnb_4bit_quant_type="nf4",
+        device = torch.device("cuda:0")
+
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type=quant_type,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+        )
+
+        model_0 = AutoModelForCausalLM.from_pretrained(
+            self.model_name,
+            quantization_config=bnb_config,
+            device_map=device,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            model_0.save_pretrained(tmpdirname, safe_serialization=safe_serialization)
+
+            config = AutoConfig.from_pretrained(tmpdirname)
+            self.assertTrue(hasattr(config, "quantization_config"))
+
+            model_1 = AutoModelForCausalLM.from_pretrained(
+                tmpdirname,
+                device_map=device,
             )
+
+        # checking quantized linear module weight
+        linear = get_some_linear_layer(model_1)
+        self.assertTrue(linear.weight.__class__ == bnb.nn.Params4bit)
+        self.assertTrue(hasattr(linear.weight, "quant_state"))
+        self.assertTrue(linear.weight.quant_state.__class__ == bnb.functional.QuantState)
+
+        self.assertAlmostEqual(model_0.get_memory_footprint() / model_1.get_memory_footprint(), 1, places=2)
+
+        # Matching all parameters and their quant_state items:
+        d0 = dict(model_0.named_parameters())
+        d1 = dict(model_1.named_parameters())
+        self.assertTrue(d0.keys() == d1.keys())
+
+        for k in d0.keys():
+            d0[k] = d0[k]
+            d1[k] = d1[k]
+            self.assertTrue(d0[k].shape == d1[k].shape)
+            self.assertTrue(d0[k].device.type == d1[k].device.type)
+            self.assertTrue(d0[k].dtype == d1[k].dtype)
+            self.assertTrue(torch.equal(d0[k], d1[k].to(d0[k].device)))
+
+            if isinstance(d0[k], bnb.nn.modules.Params4bit):
+                q0 = d0[k].quant_state
+                q1 = d1[k].quant_state
+                for v0, v1 in zip(q0.as_dict().values(), q1.as_dict().values()):
+                    if isinstance(v0, torch.Tensor):
+                        self.assertTrue(torch.equal(v0, v1.to(v0.device)))
+                    else:
+                        if v0 != v1:
+                            print(v0, v1, k)
+                        self.assertTrue(v0 == v1)
+
+        tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        # comparing forward() outputs
+        encoded_input = tokenizer(self.input_text, return_tensors="pt").to(device)
+        out0 = model_0(**encoded_input)
+        out1 = model_1(**encoded_input)
+        self.assertTrue(torch.equal(out0["logits"], out1["logits"]))
+
+        # comparing generate() outputs
+        encoded_input = tokenizer(self.input_text, return_tensors="pt").to(device)
+        output_sequences0 = model_0.generate(**encoded_input, max_new_tokens=10)
+        output_sequences1 = model_1.generate(**encoded_input, max_new_tokens=10)
+
+        def _decode(token):
+            return tokenizer.decode(token, skip_special_tokens=True)
+
+        self.assertEqual([_decode(x) for x in output_sequences0], [_decode(x) for x in output_sequences1])
 
     def test_device_and_dtype_assignment(self):
         r"""
